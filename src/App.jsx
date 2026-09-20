@@ -163,17 +163,25 @@ export default function App() {
   const startAnswerRound = async () => {
     if (scenarios.length === 0) return
 
-    setMode('host')
-    
-    await supabase.from('game_state')
-      .update({
-        current_phase: 'answering',
-        current_answer_idx: 0
-      })
-      .eq('session_id', sessionId)
+    try {
+      const { data } = await supabase.from('game_state')
+        .update({
+          current_phase: 'answering',
+          current_answer_idx: 0
+        })
+        .eq('session_id', sessionId)
+        .select()
+        .single()
 
-    setAnswers(['', '', '', ''])
-    setVotes({})
+      if (data) setGameState(data)
+      
+      setMode('host')
+      setAnswers(['', '', '', ''])
+      setVotes({})
+    } catch (error) {
+      console.error('Error starting game:', error)
+      alert('Virhe pelin aloituksessa!')
+    }
   }
 
   const nextAnswer = async () => {
