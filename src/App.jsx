@@ -45,21 +45,27 @@ export default function App() {
     if (!text.trim()) return
 
     const lines = text.split('\n').filter(l => l.trim())
-    const imported = []
 
     for (const line of lines) {
       const [title, desc] = line.split('|').map(s => s.trim())
       if (!title) continue
 
-      const { data } = await supabase
+      await supabase
         .from('scenarios')
         .insert({ session_id: sessionId, title, context: desc || '' })
-        .select()
-
-      if (data) imported.push(data[0])
     }
 
-    setScenarios(prev => [...prev, ...imported])
+    // Lataa kaikki skenaariot tietokannasta insertoinnin jälkeen
+    const { data } = await supabase
+      .from('scenarios')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('id', { ascending: true })
+
+    if (data) {
+      setScenarios(data)
+      document.getElementById('csv').value = '' // Tyhjennä tekstilaatikko
+    }
   }
 
   // =========== HOST: LATAA SKENAARIOT STARTUP ===========
