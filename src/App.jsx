@@ -18,7 +18,7 @@ export default function App() {
   const [scenarios, setScenarios] = useState([])
   const [players, setPlayers] = useState([])
   const [gameState, setGameState] = useState(null)
-  const [answers, setAnswers] = useState([])
+  const [answers, setAnswers] = useState(['', '', '', ''])
   const [votes, setVotes] = useState({})
   const [scores, setScores] = useState({})
   const [csvInput, setCsvInput] = useState('')
@@ -60,6 +60,17 @@ export default function App() {
     })
     setScenarios(imported)
     setCsvInput('')
+
+    if (sessionId) {
+      supabase
+        .channel(`scenarios:${sessionId}`)
+        .send({
+          type: 'broadcast',
+          event: 'scenarios_updated',
+          payload: { scenarios: imported }
+        })
+        .catch(() => {})
+    }
   }
 
   const joinGame = async (code) => {
@@ -160,6 +171,19 @@ export default function App() {
     fetchGameState()
   }, [sessionId])
 
+  useEffect(() => {
+    if (!sessionId || isHost) return
+
+    const subscription = supabase
+      .channel(`scenarios:${sessionId}`)
+      .on('broadcast', { event: 'scenarios_updated' }, payload => {
+        setScenarios(payload.payload.scenarios)
+      })
+      .subscribe()
+
+    return () => subscription.unsubscribe()
+  }, [sessionId, isHost])
+
   const startAnswerRound = async () => {
     if (scenarios.length === 0) return
 
@@ -199,7 +223,7 @@ export default function App() {
           current_answer_idx: null
         })
         .eq('session_id', sessionId)
-      setAnswers([])
+      setAnswers(['', '', '', ''])
       setVotes({})
     } else {
       alert('Peli päättyi!')
@@ -391,20 +415,33 @@ export default function App() {
       )
     }
 
-    return (
-      <div className="container player">
-        <h1>Tilanne-kilpailu 📱</h1>
-        <p style={{textAlign: 'center', color: '#666', marginBottom: '1.5rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
+    if (gameState.current_phase === 'setup') {
+      return (
+        <div className="container player">
+          <h1>Tilanne-kilpailu 📱</h1>
+          <p style={{textAlign: 'center', color: '#666', marginBottom: '1.5rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
+          <PlayersList />
+          <p style={{textAlign: 'center', fontSize: '18px'}}>⏳ Odottaa seuraavaa kierrosta...</p>
+          <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
+            ← Takaisin
+          </button>
+        </div>
+      )
+    }
 
-        <PlayersList />
+    if (gameState.current_phase === 'answering') {
+      const currentScenario = scenarios[gameState.current_scenario_idx]
+      
+      return (
+        <div className="container player">
+          <h1>Tilanne-kilpailu 📱</h1>
+          <p style={{textAlign: 'center', color: '#666', marginBottom: '1rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
 
-        {gameState.current_phase === 'setup' && (
-          <div className="player-screen">
-            <p style={{textAlign: 'center', fontSize: '18px'}}>⏳ Odottaa seuraavaa kierrosta...</p>
+          <div style={{background: '#f9f9f9', padding: '1rem', borderRadius: '8px', marginBottom: '2rem'}}>
+            <p style={{fontSize: '14px', color: '#666', marginTop: 0}}>Tilanne:</p>
+            <p style={{fontSize: '18px', fontWeight: 'bold', marginBottom: 0}}>❓ {currentScenario?.title || 'Ladataan...'}</p>
           </div>
-        )}
 
-        {gameState.current_phase === 'answering' && (
           <div className="player-screen">
             <h3 style={{marginBottom: '1.5rem', textAlign: 'center'}}>Kirjoita neuvosi (neljä)</h3>
             <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
@@ -444,13 +481,13 @@ export default function App() {
               </div>
             </div>
           </div>
-        )}
 
-        <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
-          ← Takaisin
-        </button>
-      </div>
-    )
+          <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
+            ← Takaisin
+          </button>
+        </div>
+      )
+    }
   }
 
   return (
