@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { v4 as uuidv4 } from 'uuid'
-import { QRCodeSVG } from 'qrcode.react'  // ← RIVI 4 (KORJATTU)
+import { QRCodeSVG } from 'qrcode.react'
 import './App.css'
 
 const SUPABASE_URL = 'https://sjvlyrtaqyywlvrcptzy.supabase.co'
