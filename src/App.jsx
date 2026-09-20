@@ -268,3 +268,164 @@ export default function App() {
   }
 
   if (mode === 'host' && gameState) {
+    const currentScenario = scenarios[gameState.current_scenario_idx]
+    const currentAnswer = answers[gameState.current_answer_idx] || ''
+
+    return (
+      <div className="container host">
+        <h1>Tilanne-kilpailu 📺</h1>
+        
+        <div style={{marginBottom: '2rem'}}>
+          <p style={{color: '#666'}}>Kierros {gameState.current_scenario_idx + 1}/{scenarios.length}</p>
+          <p className="prompt">❓ {currentScenario.title}</p>
+        </div>
+
+        <PlayersList />
+
+        {gameState.current_phase === 'answering' && (
+          <div className="game-display">
+            <h2>Vastaus {gameState.current_answer_idx + 1}</h2>
+            <div className="answer-box" style={{background: '#f0f0f0', padding: '2rem', borderRadius: '8px', marginBottom: '2rem', minHeight: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+              <p style={{fontSize: '18px', fontWeight: 'bold', textAlign: 'center'}}>
+                {currentAnswer || '(odottaa vastausta)'}
+              </p>
+            </div>
+
+            <p style={{marginBottom: '1rem', color: '#666'}}>🗳️ Äänet: <strong>{votes[`answer-${gameState.current_answer_idx}`] || 0}</strong></p>
+
+            <button onClick={nextAnswer} className="btn btn-primary" style={{width: '100%', padding: '1rem', fontSize: '16px'}}>
+              Seuraava →
+            </button>
+          </div>
+        )}
+
+        {gameState.current_phase === 'setup' && (
+          <div className="game-display">
+            <p style={{textAlign: 'center', fontSize: '18px'}}>⏳ Seuraava kierros alkaa...</p>
+          </div>
+        )}
+
+        <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
+          ← Takaisin
+        </button>
+      </div>
+    )
+  }
+
+  if (mode === 'player-join') {
+    return (
+      <div className="container menu">
+        <h1>🎮 Liity peliin</h1>
+        <div style={{maxWidth: '400px', margin: '0 auto'}}>
+          <input 
+            type="text" 
+            placeholder="Nimesi"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            style={{width: '100%', padding: '12px', marginBottom: '1rem', borderRadius: '6px', border: '1px solid #ddd', fontSize: '16px', boxSizing: 'border-box'}}
+          />
+          <input 
+            type="text" 
+            placeholder="Sessikoodi (esim. ABC123)"
+            id="sessionCode"
+            style={{width: '100%', padding: '12px', marginBottom: '1rem', borderRadius: '6px', border: '1px solid #ddd', fontSize: '16px', boxSizing: 'border-box'}}
+          />
+          <button 
+            onClick={() => {
+              const code = document.getElementById('sessionCode').value
+              if (playerName && code) {
+                joinGame(code)
+              } else {
+                alert('Kirjoita nimi ja sessikoodi!')
+              }
+            }} 
+            className="btn btn-primary" 
+            style={{width: '100%', padding: '12px', fontSize: '16px'}}
+          >
+            Liity
+          </button>
+          <button onClick={() => setMode('menu')} className="btn" style={{width: '100%', marginTop: '1rem'}}>
+            ← Takaisin
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === 'player' && gameState) {
+    return (
+      <div className="container player">
+        <h1>Tilanne-kilpailu 📱</h1>
+        <p style={{textAlign: 'center', color: '#666', marginBottom: '1.5rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
+
+        <PlayersList />
+
+        {gameState.current_phase === 'setup' && (
+          <div className="player-screen">
+            <p style={{textAlign: 'center', fontSize: '18px'}}>⏳ Odottaa pelin alkua...</p>
+          </div>
+        )}
+
+        {gameState.current_phase === 'answering' && (
+          <div className="player-screen">
+            <h3 style={{marginBottom: '1.5rem', textAlign: 'center'}}>Kirjoita neuvosi (neljä)</h3>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
+              {answers.map((ans, i) => (
+                <input
+                  key={i}
+                  type="text"
+                  placeholder={`Neuvosi ${i + 1}`}
+                  value={ans}
+                  onChange={(e) => submitAnswer(i, e.target.value)}
+                  style={{padding: '12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '16px', boxSizing: 'border-box'}}
+                />
+              ))}
+            </div>
+
+            <div style={{marginTop: '2rem', textAlign: 'center'}}>
+              <p style={{marginBottom: '1rem', color: '#666'}}>Anna tähdet</p>
+              <div style={{display: 'flex', gap: '0.75rem', justifyContent: 'center'}}>
+                {[1, 2, 3].map(stars => (
+                  <button
+                    key={stars}
+                    onClick={() => submitVote(stars)}
+                    style={{
+                      padding: '12px 16px',
+                      fontSize: '20px',
+                      background: '#ffc107',
+                      color: '#333',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {'⭐'.repeat(stars)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
+          ← Takaisin
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container menu">
+      <h1>🎮 Tilanne-kilpailu</h1>
+      <p style={{textAlign: 'center', color: '#666', marginBottom: '2rem'}}>Hauskaa seuraavaksi synttäreillä!</p>
+      <div className="menu-buttons" style={{maxWidth: '400px', margin: '0 auto'}}>
+        <button onClick={startGame} className="btn btn-primary" style={{width: '100%', padding: '1rem', fontSize: '18px', marginBottom: '1rem'}}>
+          📺 Aloita HOST
+        </button>
+        <button onClick={() => setMode('player-join')} className="btn btn-primary" style={{width: '100%', padding: '1rem', fontSize: '18px'}}>
+          📱 Liity peliin
+        </button>
+      </div>
+    </div>
+  )
