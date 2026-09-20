@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import QRCode from 'qrcode.react'
 import { v4 as uuidv4 } from 'uuid'
+import QRCode from 'qrcode'
 import './App.css'
 
 const SUPABASE_URL = 'https://sjvlyrtaqyywlvrcptzy.supabase.co'
@@ -10,7 +10,7 @@ const SUPABASE_KEY = 'sb_publishable_9Q76hK2aATVqJAtK07MmDQ_GA1o8PHi'
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 export default function App() {
-  const [mode, setMode] = useState('menu') // menu, host, player
+  const [mode, setMode] = useState('menu')
   const [sessionId, setSessionId] = useState(null)
   const [playerId, setPlayerId] = useState(null)
   const [gameMode, setGameMode] = useState(null)
@@ -20,13 +20,26 @@ export default function App() {
   const [currentAnswerIdx, setCurrentAnswerIdx] = useState(null)
   const [playerVote, setPlayerVote] = useState(null)
   const [votes, setVotes] = useState({})
-  const [scores, setScores] = useState({})
   const [csvInput, setCsvInput] = useState('')
   const [playerName, setPlayerName] = useState('')
 
+  // Generoi QR-koodi
+  useEffect(() => {
+    if (sessionId && mode === 'host') {
+      const canvas = document.getElementById('qr-canvas')
+      if (canvas) {
+        QRCode.toCanvas(canvas, `https://seliselipeli.netlify.app?join=${sessionId}`, {
+          width: 150,
+          margin: 2,
+          color: { dark: '#000', light: '#fff' }
+        })
+      }
+    }
+  }, [sessionId, mode])
+
   // Host: Aloita peli
   const startGame = async (selectedMode) => {
-    const newSessionId = uuidv4().substring(0, 6)
+    const newSessionId = uuidv4().substring(0, 6).toUpperCase()
     setSessionId(newSessionId)
     setGameMode(selectedMode)
     setMode('host')
@@ -37,15 +50,18 @@ export default function App() {
     })
 
     if (selectedMode === 'preset') {
-      // Oletusscenaariot
       const defaultScenarios = [
         {
           title: 'Mitä sanot vanhalle miehelle, joka roikkuu pää alaspäin?',
           context: 'Tosiasiassa oletkin itse pää alaspäin tehtävässä ja vanha mies näyttää roikkuvan pääalaspäin.'
         },
         {
-          title: 'Mikä on paras neuvosi nuorelle ihmiselle, joka ei halua mennä töihin?',
-          context: 'Tosiasiassa hän on jo yrittäjä ja kertoo asiasta potentiaalisille sijoittajille.'
+          title: 'Mikä on paras neuvosi nuorelle, joka ei halua mennä töihin?',
+          context: 'Tosiasiassa hän on jo yrittäjä ja kertoo asiasta sijoittajille.'
+        },
+        {
+          title: 'Miten auttaisit ystävää joka näyttää syventyneen videopeleihin?',
+          context: 'Tosiasiassa hän kehittää pelejä ammatissa ja tekee tutkimusta.'
         }
       ]
       setScenarios(defaultScenarios)
@@ -54,10 +70,10 @@ export default function App() {
 
   // CSV import
   const handleCSVImport = (csv) => {
-    const lines = csv.trim().split('\n')
+    const lines = csv.trim().split('\n').filter(l => l.trim())
     const imported = lines.map(line => {
-      const [title, context] = line.split('|')
-      return { title: title.trim(), context: context.trim() }
+      const [title, context] = line.split('|').map(s => s.trim())
+      return { title, context }
     })
     setScenarios(imported)
     setCsvInput('')
@@ -79,7 +95,7 @@ export default function App() {
 
   // Kuuntele pelaajia
   useEffect(() => {
-    if (!sessionId) return
+    if (!sessionId || mode !== 'host') return
 
     const subscription = supabase
       .channel(`players:${sessionId}`)
@@ -89,23 +105,25 @@ export default function App() {
       .subscribe()
 
     return () => subscription.unsubscribe()
-  }, [sessionId])
+  }, [sessionId, mode])
 
+  // Menu
   if (mode === 'menu') {
     return (
       <div className="container menu">
         <h1>🎮 Tilanne-kilpailu</h1>
         <div className="menu-buttons">
           <button onClick={() => startGame('preset')} className="btn btn-primary">
-            Host - Valmiit tilanteet
+            📺 Host - Valmiit tilanteet
           </button>
           <button onClick={() => startGame('dynamic')} className="btn btn-primary">
-            Host - Dynaaminen moodi
+            📺 Host - Dynaaminen moodi
           </button>
           <div className="join-section">
+            <h3>📱 Liity peliin</h3>
             <input 
               type="text" 
-              placeholder="Nimesi"
+              placeholder="Anna nimesi"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
             />
@@ -116,26 +134,33 @@ export default function App() {
                 if (e.key === 'Enter') joinGame(e.target.value.toUpperCase())
               }}
             />
+            <button onClick={() => playerName && joinGame('')} className="btn btn-primary" disabled={!playerName}>
+              Liity
+            </button>
           </div>
         </div>
       </div>
     )
   }
 
+  // Host
   if (mode === 'host') {
     return (
       <div className="container host">
         <div className="header">
-          <h1>Tilanne-kilpailu - Host</h1>
-          <div className="session-code">
-            Sessikoodi: <strong>{sessionId}</strong>
-            <QRCode value={`https://tilannekilpailu.netlify.app?join=${sessionId}`} size={100} />
+          <h1>Tilanne-kilpailu 🎮</h1>
+          <div className="session-info">
+            <div className="session-code">
+              <strong>Sessikoodi:</strong> {sessionId}
+            </div>
+            <canvas id="qr-canvas" style={{marginTop: '1rem', background: 'white', padding: '10px', borderRadius: '8px'}}></canvas>
+            <p style={{marginTop: '1rem', color: '#666', fontSize: '12px'}}>Pelaajia: {players.length}</p>
           </div>
         </div>
 
         {scenarios.length === 0 && (
           <div className="setup">
-            <h2>Lisää tilanteet</h2>
+            <h2>📋 Lisää tilanteet</h2>
             <div className="csv-section">
               <label>CSV-muoto: Tilanne|Paljastus</label>
               <textarea 
@@ -144,7 +169,7 @@ export default function App() {
                 placeholder="Tilanne 1|Paljastus 1&#10;Tilanne 2|Paljastus 2"
               />
               <button onClick={() => handleCSVImport(csvInput)} className="btn btn-primary">
-                Tuo CSV
+                📥 Tuo CSV
               </button>
             </div>
           </div>
@@ -152,39 +177,38 @@ export default function App() {
 
         {scenarios.length > 0 && (
           <div className="game-display">
-            <h2>Pelaajia: {players.length}</h2>
-            <div className="scenario-display">
-              <p className="prompt">{scenarios[currentScenarioIdx].title}</p>
+            <div className="scenario-box">
+              <p className="prompt">❓ {scenarios[currentScenarioIdx]?.title}</p>
               {currentAnswerIdx !== null && (
-                <>
-                  <div className="answer-section">
-                    <p>Vastaus {currentAnswerIdx + 1}</p>
-                  </div>
-                  <div className="votes-display">
-                    Äänet: {votes[currentAnswerIdx] || 0}
-                  </div>
-                </>
+                <div className="answer-box">
+                  <p><strong>Vastaus {currentAnswerIdx + 1}</strong></p>
+                  <p style={{marginTop: '1rem', fontSize: '14px', color: '#666'}}>Pelaajien äänet: {votes[currentAnswerIdx] || 0}</p>
+                </div>
               )}
             </div>
           </div>
         )}
 
-        <div className="controls">
-          <button onClick={() => setMode('menu')} className="btn">Takaisin</button>
-        </div>
+        <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem'}}>
+          ← Takaisin
+        </button>
       </div>
     )
   }
 
+  // Player
   if (mode === 'player') {
     return (
       <div className="container player">
-        <h1>Tilanne-kilpailu</h1>
-        <p>Sessiossa: {sessionId}</p>
+        <h1>Tilanne-kilpailu 🎮</h1>
+        <p style={{textAlign: 'center', color: '#666'}}>Sessiossa: <strong>{sessionId}</strong></p>
         <div className="player-screen">
-          <p>Odottaa pelin alkua...</p>
+          <p>⏳ Odottaa pelin alkua...</p>
+          <p style={{marginTop: '1rem', fontSize: '14px', color: '#999'}}>Nimesi: {playerName}</p>
         </div>
-        <button onClick={() => setMode('menu')} className="btn">Takaisin</button>
+        <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem'}}>
+          ← Takaisin
+        </button>
       </div>
     )
   }
