@@ -145,6 +145,21 @@ export default function App() {
     fetchPlayers()
   }, [sessionId])
 
+  useEffect(() => {
+    if (!sessionId) return
+
+    const fetchGameState = async () => {
+      const { data } = await supabase
+        .from('game_state')
+        .select('*')
+        .eq('session_id', sessionId)
+        .single()
+      if (data) setGameState(data)
+    }
+
+    fetchGameState()
+  }, [sessionId])
+
   const startAnswerRound = async () => {
     if (scenarios.length === 0) return
 
@@ -443,5 +458,5 @@ export default function App() {
         </button>
       </div>
     </div>
-  )
+    )
 }
