@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { v4 as uuidv4 } from 'uuid'
-import QRCode from 'qrcode.react'
+import { QRCodeSVG } from 'qrcode.react'  // ← RIVI 4 (KORJATTU)
 import './App.css'
 
 const SUPABASE_URL = 'https://sjvlyrtaqyywlvrcptzy.supabase.co'
@@ -24,20 +24,6 @@ export default function App() {
   const [votes, setVotes] = useState({})
   const [scores, setScores] = useState({})
   const [gameStarted, setGameStarted] = useState(false)
-
-  // Generoi QR-koodi
-  useEffect(() => {
-    if (sessionId && mode === 'host') {
-      const canvas = document.getElementById('qr-canvas')
-      if (canvas) {
-        QRCode.toCanvas(canvas, `https://seliselipeli.netlify.app?join=${sessionId}`, {
-          width: 150,
-          margin: 2,
-          color: { dark: '#000', light: '#fff' }
-        })
-      }
-    }
-  }, [sessionId, mode])
 
   // Host: Aloita peli
   const startGame = async (selectedMode) => {
@@ -130,14 +116,12 @@ export default function App() {
   // Player: Anna tähdet
   const submitVote = async (stars) => {
     if (sessionId && playerId && currentAnswerIdx !== null) {
-      // Päivitä local votes
       const key = `answer-${currentAnswerIdx}`
       setVotes(prev => ({
         ...prev,
         [key]: (prev[key] || 0) + stars
       }))
       
-      // Päivitä pisteet
       setScores(prev => ({
         ...prev,
         [currentAnswerIdx]: (prev[currentAnswerIdx] || 0) + stars
@@ -155,7 +139,9 @@ export default function App() {
             <div className="session-code">
               <strong>Sessikoodi:</strong> {sessionId}
             </div>
-            <canvas id="qr-canvas" style={{marginTop: '1rem', background: 'white', padding: '10px', borderRadius: '8px'}}></canvas>
+            <div style={{marginTop: '1rem', background: 'white', padding: '10px', borderRadius: '8px', display: 'inline-block'}}>
+              <QRCodeSVG value={`https://seliselipeli.netlify.app?join=${sessionId}`} size={150} />  {/* ← RIVI 145 (KORJATTU) */}
+            </div>
             <p style={{marginTop: '1rem', color: '#666', fontSize: '12px'}}>Pelaajia: {players.length}</p>
           </div>
         </div>
