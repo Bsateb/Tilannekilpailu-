@@ -11,7 +11,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@supabase/supabase-js": "^2.38.0",
-    "qrcode.react": "^1.0.1",
+    "qrcode": "^1.5.3",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
