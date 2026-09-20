@@ -148,6 +148,8 @@ export default function App() {
   const startAnswerRound = async () => {
     if (scenarios.length === 0) return
 
+    setMode('host')
+    
     await supabase.from('game_state')
       .update({
         current_phase: 'answering',
@@ -352,7 +354,20 @@ export default function App() {
     )
   }
 
-  if (mode === 'player' && gameState) {
+  if (mode === 'player') {
+    if (!gameState) {
+      return (
+        <div className="container player">
+          <h1>Tilanne-kilpailu 📱</h1>
+          <p style={{textAlign: 'center', color: '#666', marginBottom: '1.5rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
+          <p style={{textAlign: 'center', fontSize: '18px', marginTop: '3rem'}}>⏳ Odottaa pelin alkua...</p>
+          <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
+            ← Takaisin
+          </button>
+        </div>
+      )
+    }
+
     return (
       <div className="container player">
         <h1>Tilanne-kilpailu 📱</h1>
@@ -362,7 +377,7 @@ export default function App() {
 
         {gameState.current_phase === 'setup' && (
           <div className="player-screen">
-            <p style={{textAlign: 'center', fontSize: '18px'}}>⏳ Odottaa pelin alkua...</p>
+            <p style={{textAlign: 'center', fontSize: '18px'}}>⏳ Odottaa seuraavaa kierrosta...</p>
           </div>
         )}
 
@@ -429,4 +444,4 @@ export default function App() {
       </div>
     </div>
   )
-  }
+}
