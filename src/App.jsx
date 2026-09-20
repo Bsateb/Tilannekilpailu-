@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { v4 as uuidv4 } from 'uuid'
-import QRCode from 'qrcode'
+import QRCode from 'qrcode.react'
 import './App.css'
 
 const SUPABASE_URL = 'https://sjvlyrtaqyywlvrcptzy.supabase.co'
