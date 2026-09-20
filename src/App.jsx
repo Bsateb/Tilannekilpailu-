@@ -59,8 +59,25 @@ export default function App() {
       if (data) imported.push(data[0])
     }
 
-    setScenarios(imported)
+    setScenarios(prev => [...prev, ...imported])
   }
+
+  // =========== HOST: LATAA SKENAARIOT STARTUP ===========
+  useEffect(() => {
+    if (!sessionId || screen !== 'host-setup') return
+
+    const loadScenarios = async () => {
+      const { data } = await supabase
+        .from('scenarios')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('id', { ascending: true })
+
+      if (data) setScenarios(data)
+    }
+
+    loadScenarios()
+  }, [sessionId, screen])
 
   // =========== HOST: ALOITA PELIä ===========
   const hostStartGame = async () => {
@@ -122,6 +139,9 @@ export default function App() {
       )
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players' },
         (p) => setPlayers(prev => [...prev, p.new])
+      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'scenarios' },
+        (p) => setScenarios(prev => [...prev, p.new])
       )
       .subscribe()
 
