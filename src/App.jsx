@@ -22,6 +22,7 @@ export default function App() {
   const [votes, setVotes] = useState({})
   const [csvInput, setCsvInput] = useState('')
   const [currentScenario, setCurrentScenario] = useState(null)
+  const [loading, setLoading] = useState(false)
 
   const startGame = async () => {
     const newSessionId = uuidv4().substring(0, 6).toUpperCase()
@@ -79,28 +80,47 @@ export default function App() {
   }
 
   const joinGame = async (code) => {
-    const { data, error } = await supabase
-      .from('game_state')
-      .select('*')
-      .eq('session_id', code.toUpperCase())
-      .single()
+    setLoading(true)
+    
+    try {
+      const { data: gameStateData, error: gsError } = await supabase
+        .from('game_state')
+        .select('*')
+        .eq('session_id', code.toUpperCase())
+        .single()
 
-    if (error) {
-      alert('Sessiota ei löydy!')
-      return
+      if (gsError || !gameStateData) {
+        alert('Sessiota ei löydy!')
+        setLoading(false)
+        return
+      }
+
+      const { data: scenariosData } = await supabase
+        .from('scenarios')
+        .select('*')
+        .eq('session_id', code.toUpperCase())
+        .order('id', { ascending: true })
+
+      const newPlayerId = uuidv4()
+      
+      await supabase.from('players').insert({
+        id: newPlayerId,
+        session_id: code.toUpperCase(),
+        name: playerName || `Pelaaja ${Math.floor(Math.random() * 1000)}`,
+        joined_at: new Date().toISOString()
+      })
+
+      setPlayerId(newPlayerId)
+      setSessionId(code.toUpperCase())
+      setGameState(gameStateData)
+      if (scenariosData) setScenarios(scenariosData)
+      setMode('player')
+    } catch (error) {
+      console.error('Join error:', error)
+      alert('Virhe liittyessä peliin!')
     }
-
-    const newPlayerId = uuidv4()
-    setPlayerId(newPlayerId)
-    setSessionId(code.toUpperCase())
-    setMode('player')
-
-    await supabase.from('players').insert({
-      id: newPlayerId,
-      session_id: code.toUpperCase(),
-      name: playerName || `Pelaaja ${Math.floor(Math.random() * 1000)}`,
-      joined_at: new Date().toISOString()
-    })
+    
+    setLoading(false)
   }
 
   useEffect(() => {
@@ -143,7 +163,7 @@ export default function App() {
       
       if (data) {
         setGameState(data)
-        if (scenarios.length > 0) {
+        if (scenarios.length > 0 && data.current_scenario_idx < scenarios.length) {
           setCurrentScenario(scenarios[data.current_scenario_idx])
         }
       }
@@ -157,7 +177,7 @@ export default function App() {
         { event: 'UPDATE', schema: 'public', table: 'game_state' },
         (payload) => {
           setGameState(payload.new)
-          if (scenarios.length > 0) {
+          if (scenarios.length > 0 && payload.new.current_scenario_idx < scenarios.length) {
             setCurrentScenario(scenarios[payload.new.current_scenario_idx])
           }
         }
@@ -374,12 +394,14 @@ export default function App() {
             placeholder="Nimesi"
             value={playerName}
             onChange={(e) => setPlayerName(e.target.value)}
+            disabled={loading}
             style={{width: '100%', padding: '12px', marginBottom: '1rem', borderRadius: '6px', border: '1px solid #ddd', fontSize: '16px', boxSizing: 'border-box'}}
           />
           <input 
             type="text" 
             placeholder="Sessikoodi (esim. ABC123)"
             id="sessionCode"
+            disabled={loading}
             style={{width: '100%', padding: '12px', marginBottom: '1rem', borderRadius: '6px', border: '1px solid #ddd', fontSize: '16px', boxSizing: 'border-box'}}
           />
           <button 
@@ -391,12 +413,13 @@ export default function App() {
                 alert('Kirjoita nimi ja sessikoodi!')
               }
             }} 
+            disabled={loading}
             className="btn btn-primary" 
-            style={{width: '100%', padding: '12px', fontSize: '16px'}}
+            style={{width: '100%', padding: '12px', fontSize: '16px', opacity: loading ? 0.6 : 1}}
           >
-            Liity
+            {loading ? '⏳ Liitytään...' : 'Liity'}
           </button>
-          <button onClick={() => setMode('menu')} className="btn" style={{width: '100%', marginTop: '1rem'}}>
+          <button onClick={() => setMode('menu')} className="btn" disabled={loading} style={{width: '100%', marginTop: '1rem', opacity: loading ? 0.6 : 1}}>
             ← Takaisin
           </button>
         </div>
@@ -404,106 +427,109 @@ export default function App() {
     )
   }
 
-  if (mode === 'player' && !gameState?.current_phase) {
-    return (
-      <div className="container player">
-        <h1>Tilanne-kilpailu 📱</h1>
-        <p style={{textAlign: 'center', color: '#666', marginBottom: '1.5rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
-        <PlayersList />
-        <p style={{textAlign: 'center', fontSize: '18px', marginTop: '2rem'}}>⏳ Odottaa pelin alkua...</p>
-        <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
-          ← Takaisin
-        </button>
-      </div>
-    )
-  }
-
-  if (mode === 'player' && gameState?.current_phase === 'answering' && currentScenario) {
-    return (
-      <div className="container player">
-        <h1>Tilanne-kilpailu 📱</h1>
-        <p style={{textAlign: 'center', color: '#666', marginBottom: '1rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
-
-        <div style={{background: '#f9f9f9', padding: '1rem', borderRadius: '8px', marginBottom: '2rem'}}>
-          <p style={{fontSize: '14px', color: '#666', marginTop: 0, marginBottom: '0.5rem'}}>Tilanne:</p>
-          <p style={{fontSize: '18px', fontWeight: 'bold', marginBottom: 0}}>❓ {currentScenario.title}</p>
+  if (mode === 'player') {
+    if (!gameState || gameState.current_phase === 'setup') {
+      return (
+        <div className="container player">
+          <h1>Tilanne-kilpailu 📱</h1>
+          <p style={{textAlign: 'center', color: '#666', marginBottom: '1.5rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
+          <p style={{textAlign: 'center', fontSize: '14px', color: '#999', marginBottom: '1rem'}}>Pelaajia: {players.length}</p>
+          <PlayersList />
+          <p style={{textAlign: 'center', fontSize: '18px', marginTop: '2rem'}}>⏳ Odottaa pelin alkua...</p>
+          <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
+            ← Takaisin
+          </button>
         </div>
+      )
+    }
 
-        <div style={{marginBottom: '2rem'}}>
-          <h3 style={{marginBottom: '1.5rem', textAlign: 'center'}}>✍️ Kirjoita neuvosi (neljä)</h3>
-          <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
-            {answers.map((ans, i) => (
-              <input
-                key={i}
-                type="text"
-                placeholder={`Neuvosi ${i + 1}`}
-                value={ans}
-                onChange={(e) => submitPlayerAnswer(i, e.target.value)}
-                style={{padding: '12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '16px', boxSizing: 'border-box'}}
-              />
-            ))}
+    if (gameState.current_phase === 'answering' && currentScenario) {
+      return (
+        <div className="container player">
+          <h1>Tilanne-kilpailu 📱</h1>
+          <p style={{textAlign: 'center', color: '#666', marginBottom: '1rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
+
+          <div style={{background: '#f9f9f9', padding: '1rem', borderRadius: '8px', marginBottom: '2rem'}}>
+            <p style={{fontSize: '14px', color: '#666', marginTop: 0, marginBottom: '0.5rem'}}>Tilanne:</p>
+            <p style={{fontSize: '18px', fontWeight: 'bold', marginBottom: 0}}>❓ {currentScenario.title}</p>
           </div>
-        </div>
 
-        <button onClick={() => setMode('menu')} className="btn" style={{width: '100%'}}>
-          ← Takaisin
-        </button>
-      </div>
-    )
-  }
-
-  if (mode === 'player' && gameState?.current_phase === 'voting' && currentScenario) {
-    return (
-      <div className="container player">
-        <h1>Tilanne-kilpailu 📱</h1>
-        <p style={{textAlign: 'center', color: '#666', marginBottom: '1rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
-
-        <div style={{background: '#f9f9f9', padding: '1rem', borderRadius: '8px', marginBottom: '2rem'}}>
-          <p style={{fontSize: '14px', color: '#666', marginTop: 0, marginBottom: '0.5rem'}}>Tilanne:</p>
-          <p style={{fontSize: '18px', fontWeight: 'bold', marginBottom: 0}}>❓ {currentScenario.title}</p>
-        </div>
-
-        <div style={{marginBottom: '2rem'}}>
-          <h3 style={{marginBottom: '2rem', textAlign: 'center'}}>⭐ Arvioi vastaus</h3>
-          <p style={{textAlign: 'center', fontSize: '14px', color: '#666', marginBottom: '1.5rem'}}>Vastaus {gameState.current_answer_idx + 1} / 4</p>
-          
-          <div style={{display: 'flex', gap: '1rem', justifyContent: 'center'}}>
-            {[1, 2, 3].map(stars => (
-              <button
-                key={stars}
-                onClick={() => submitPlayerVote(stars)}
-                style={{
-                  padding: '16px 20px',
-                  fontSize: '24px',
-                  background: votes[`answer-${gameState.current_answer_idx}`] === stars ? '#ff9800' : '#ffc107',
-                  color: '#333',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  transition: 'all 0.1s',
-                  boxShadow: votes[`answer-${gameState.current_answer_idx}`] === stars ? '0 4px 8px rgba(0,0,0,0.2)' : 'none'
-                }}
-                onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
-                onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-              >
-                {'⭐'.repeat(stars)}
-              </button>
-            ))}
+          <div style={{marginBottom: '2rem'}}>
+            <h3 style={{marginBottom: '1.5rem', textAlign: 'center'}}>✍️ Kirjoita neuvosi (neljä)</h3>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
+              {answers.map((ans, i) => (
+                <input
+                  key={i}
+                  type="text"
+                  placeholder={`Neuvosi ${i + 1}`}
+                  value={ans}
+                  onChange={(e) => submitPlayerAnswer(i, e.target.value)}
+                  style={{padding: '12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '16px', boxSizing: 'border-box'}}
+                />
+              ))}
+            </div>
           </div>
+
+          <button onClick={() => setMode('menu')} className="btn" style={{width: '100%'}}>
+            ← Takaisin
+          </button>
         </div>
+      )
+    }
 
-        <p style={{textAlign: 'center', color: '#999', fontSize: '14px'}}>
-          {votes[`answer-${gameState.current_answer_idx}`] 
-            ? `✓ Olet antanut ${votes[`answer-${gameState.current_answer_idx}`]} tähteä` 
-            : 'Valitse tähdet...'}
-        </p>
+    if (gameState.current_phase === 'voting' && currentScenario) {
+      return (
+        <div className="container player">
+          <h1>Tilanne-kilpailu 📱</h1>
+          <p style={{textAlign: 'center', color: '#666', marginBottom: '1rem'}}>Sessiossa: <strong>{sessionId}</strong></p>
 
-        <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
-          ← Takaisin
-        </button>
-      </div>
-    )
+          <div style={{background: '#f9f9f9', padding: '1rem', borderRadius: '8px', marginBottom: '2rem'}}>
+            <p style={{fontSize: '14px', color: '#666', marginTop: 0, marginBottom: '0.5rem'}}>Tilanne:</p>
+            <p style={{fontSize: '18px', fontWeight: 'bold', marginBottom: 0}}>❓ {currentScenario.title}</p>
+          </div>
+
+          <div style={{marginBottom: '2rem'}}>
+            <h3 style={{marginBottom: '2rem', textAlign: 'center'}}>⭐ Arvioi vastaus</h3>
+            <p style={{textAlign: 'center', fontSize: '14px', color: '#666', marginBottom: '1.5rem'}}>Vastaus {gameState.current_answer_idx + 1} / 4</p>
+            
+            <div style={{display: 'flex', gap: '1rem', justifyContent: 'center'}}>
+              {[1, 2, 3].map(stars => (
+                <button
+                  key={stars}
+                  onClick={() => submitPlayerVote(stars)}
+                  style={{
+                    padding: '16px 20px',
+                    fontSize: '24px',
+                    background: votes[`answer-${gameState.current_answer_idx}`] === stars ? '#ff9800' : '#ffc107',
+                    color: '#333',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    transition: 'all 0.1s',
+                    boxShadow: votes[`answer-${gameState.current_answer_idx}`] === stars ? '0 4px 8px rgba(0,0,0,0.2)' : 'none'
+                  }}
+                  onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
+                  onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                >
+                  {'⭐'.repeat(stars)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <p style={{textAlign: 'center', color: '#999', fontSize: '14px'}}>
+            {votes[`answer-${gameState.current_answer_idx}`] 
+              ? `✓ Olet antanut ${votes[`answer-${gameState.current_answer_idx}`]} tähteä` 
+              : 'Valitse tähdet...'}
+          </p>
+
+          <button onClick={() => setMode('menu')} className="btn" style={{marginTop: '2rem', width: '100%'}}>
+            ← Takaisin
+          </button>
+        </div>
+      )
+    }
   }
 
   return (
